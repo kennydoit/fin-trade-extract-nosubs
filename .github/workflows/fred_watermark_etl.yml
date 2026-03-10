@@ -1,6 +1,14 @@
 name: FRED ETL - Watermark Based
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fred_watermark_etl.yml'
+      - 'scripts/**'
+      - 'snowflake/**'
+      - 'config/**'
   workflow_dispatch:
     inputs:
       category_filter:
