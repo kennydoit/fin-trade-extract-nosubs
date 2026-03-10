@@ -1,0 +1,17 @@
+{
+  "name": "fin-trade-extract-nosubs",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "workspaceFolder": "/workspaces/fin-trade-extract-nosubs",
+  "initializeCommand": "bash -lc 'set -euo pipefail; ROOT=\"${localWorkspaceFolder}/..\"; if [ ! -d \"$ROOT/fred-database/.git\" ]; then git clone https://github.com/kennydoit/fred-database \"$ROOT/fred-database\"; fi; if [ ! -d \"$ROOT/fin-trade-extract/.git\" ]; then git clone https://github.com/kennydoit/fin-trade-extract \"$ROOT/fin-trade-extract\"; fi'",
+  "mounts": [
+    "source=${localWorkspaceFolder}/../fred-database,target=/workspaces/fred-database,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/../fin-trade-extract,target=/workspaces/fin-trade-extract,type=bind,consistency=cached"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
