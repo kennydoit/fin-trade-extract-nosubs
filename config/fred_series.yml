@@ -1,0 +1,28 @@
+start_date: 1950-01-01
+common_series:
+  inflation:
+    - CPIAUCSL
+    - PCEPI
+    - T5YIE
+    - T10YIE
+  labor:
+    - UNRATE
+    - PAYEMS
+    - CIVPART
+    - U6RATE
+  growth:
+    - GDP
+    - GDPC1
+    - INDPRO
+    - RSAFS
+  rates:
+    - FEDFUNDS
+    - DGS2
+    - DGS10
+    - SOFR
+  housing:
+    - HOUST
+    - CSUSHPISA
+  credit:
+    - BAMLH0A0HYM2
+    - BAMLC0A4CBBB

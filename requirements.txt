@@ -1,0 +1,6 @@
+boto3
+cryptography
+fredapi
+pandas
+PyYAML
+snowflake-connector-python
