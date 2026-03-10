@@ -14,6 +14,7 @@ import csv
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from io import StringIO
@@ -391,6 +392,49 @@ def upload_rows_to_s3(
     return s3_key
 
 
+def upload_rows_to_local(
+    output_dir: str,
+    series_id: str,
+    rows: List[Dict[str, object]],
+    meta: Dict[str, str],
+    extracted_at_iso: str,
+) -> str:
+    safe_series_id = re.sub(r"[^A-Za-z0-9_-]", "_", series_id)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    series_dir = os.path.join(output_dir, f"series_id={safe_series_id}")
+    os.makedirs(series_dir, exist_ok=True)
+    output_path = os.path.join(series_dir, f"{safe_series_id}_{timestamp}.csv")
+
+    with open(output_path, "w", encoding="utf-8", newline="") as csvfile:
+        writer = csv.DictWriter(
+            csvfile,
+            fieldnames=[
+                "series_id",
+                "date",
+                "value",
+                "title",
+                "frequency",
+                "units",
+                "extracted_at",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "series_id": row["series_id"],
+                    "date": row["date"],
+                    "value": row["value"],
+                    "title": meta.get("title", ""),
+                    "frequency": meta.get("frequency", ""),
+                    "units": meta.get("units", ""),
+                    "extracted_at": extracted_at_iso,
+                }
+            )
+
+    return output_path
+
+
 def build_snowflake_config() -> Dict[str, object]:
     return {
         "account": os.environ["SNOWFLAKE_ACCOUNT"],
@@ -406,6 +450,9 @@ def main() -> None:
     logger.info("Starting FRED watermark ETL")
 
     fred_api_key = os.environ["FRED_API_KEY"]
+    disable_watermark = os.environ.get("FRED_DISABLE_WATERMARK", "false").lower() == "true"
+    upload_target = os.environ.get("FRED_UPLOAD_TARGET", "s3").lower()
+    local_output_dir = os.environ.get("FRED_LOCAL_OUTPUT_DIR", "/tmp/fred_data")
     s3_bucket = os.environ.get("S3_BUCKET", "fin-trade-extract-nosubs-bucket")
     s3_prefix = os.environ.get("S3_FRED_PREFIX", "fred/")
     if not s3_prefix.endswith("/"):
@@ -434,17 +481,27 @@ def main() -> None:
     run_id = datetime.now(timezone.utc).strftime("fred_%Y%m%d_%H%M%S")
     extracted_at_iso = datetime.now(timezone.utc).isoformat()
 
-    snowflake_config = build_snowflake_config()
-    watermark_manager = FredWatermarkManager(snowflake_config)
+    existing_watermarks: Dict[str, Optional[str]] = {}
+    snowflake_config: Optional[Dict[str, object]] = None
+    if not disable_watermark:
+        snowflake_config = build_snowflake_config()
+        watermark_manager = FredWatermarkManager(snowflake_config)
 
-    try:
-        watermark_manager.ensure_tables()
-        existing_watermarks = watermark_manager.get_existing_watermarks(series_ids)
-    finally:
-        watermark_manager.close()
+        try:
+            watermark_manager.ensure_tables()
+            existing_watermarks = watermark_manager.get_existing_watermarks(series_ids)
+        finally:
+            watermark_manager.close()
+    else:
+        logger.info("Watermark mode disabled; using default start date for all series")
 
     fred = Fred(api_key=fred_api_key)
-    s3_client = boto3.client("s3")
+    s3_client = boto3.client("s3") if upload_target == "s3" else None
+    if upload_target == "local":
+        os.makedirs(local_output_dir, exist_ok=True)
+    elif upload_target != "s3":
+        logger.error("Invalid FRED_UPLOAD_TARGET '%s'. Use 's3' or 'local'.", upload_target)
+        sys.exit(1)
 
     successful_updates: List[Dict[str, str]] = []
     failed_series_ids: List[str] = []
@@ -481,15 +538,24 @@ def main() -> None:
                 logger.info("No new observations for %s", series_id)
                 continue
 
-            s3_key = upload_rows_to_s3(
-                s3_client=s3_client,
-                bucket=s3_bucket,
-                prefix=s3_prefix,
-                series_id=series_id,
-                rows=rows,
-                meta=meta,
-                extracted_at_iso=extracted_at_iso,
-            )
+            if upload_target == "s3":
+                s3_key = upload_rows_to_s3(
+                    s3_client=s3_client,
+                    bucket=s3_bucket,
+                    prefix=s3_prefix,
+                    series_id=series_id,
+                    rows=rows,
+                    meta=meta,
+                    extracted_at_iso=extracted_at_iso,
+                )
+            else:
+                s3_key = upload_rows_to_local(
+                    output_dir=local_output_dir,
+                    series_id=series_id,
+                    rows=rows,
+                    meta=meta,
+                    extracted_at_iso=extracted_at_iso,
+                )
 
             last_observation_date = rows[-1]["date"]
             successful_updates.append(
@@ -517,7 +583,10 @@ def main() -> None:
 
             totals["successful_series"] += 1
             totals["rows_uploaded"] += len(rows)
-            logger.info("Uploaded %d rows for %s to s3://%s/%s", len(rows), series_id, s3_bucket, s3_key)
+            if upload_target == "s3":
+                logger.info("Uploaded %d rows for %s to s3://%s/%s", len(rows), series_id, s3_bucket, s3_key)
+            else:
+                logger.info("Wrote %d rows for %s to %s", len(rows), series_id, s3_key)
 
         except Exception as exc:
             failed_series_ids.append(series_id)
@@ -537,14 +606,15 @@ def main() -> None:
                 }
             )
 
-    watermark_manager = FredWatermarkManager(snowflake_config)
-    try:
-        watermark_manager.connect()
-        watermark_manager.bulk_update_watermarks(successful_updates)
-        watermark_manager.increment_failures(failed_series_ids)
-        watermark_manager.insert_extraction_logs(extraction_logs)
-    finally:
-        watermark_manager.close()
+    if not disable_watermark and snowflake_config is not None:
+        watermark_manager = FredWatermarkManager(snowflake_config)
+        try:
+            watermark_manager.connect()
+            watermark_manager.bulk_update_watermarks(successful_updates)
+            watermark_manager.increment_failures(failed_series_ids)
+            watermark_manager.insert_extraction_logs(extraction_logs)
+        finally:
+            watermark_manager.close()
 
     results = {
         "run_id": run_id,
@@ -552,6 +622,9 @@ def main() -> None:
         "finished_at": datetime.now(timezone.utc).isoformat(),
         "s3_bucket": s3_bucket,
         "s3_prefix": s3_prefix,
+        "upload_target": upload_target,
+        "disable_watermark": disable_watermark,
+        "local_output_dir": local_output_dir if upload_target == "local" else None,
         "default_start_date": default_start_date,
         "category_filter": category_filter,
         "max_series": max_series_int,

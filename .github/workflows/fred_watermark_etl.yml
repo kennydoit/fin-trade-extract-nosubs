@@ -1,4 +1,4 @@
-name: FRED ETL - Watermark Based
+name: FRED ETL - No Watermark (Temporary)
 
 on:
   push:
@@ -24,7 +24,7 @@ on:
     - cron: "0 23 * * *"
 
 jobs:
-  watermark-fred-etl:
+  fred-etl-no-watermark:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
     permissions:
@@ -36,10 +36,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Decode Snowflake private key
-        run: echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY_DER_B64 }}" | base64 -d > snowflake_rsa_key.der
-        working-directory: ${{ github.workspace }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -50,29 +46,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3 pyyaml fredapi pandas snowflake-connector-python cryptography
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION || vars.AWS_REGION || 'us-east-1' }}
-
-      - name: Fetch FRED data using watermarks
+      - name: Fetch FRED data (no watermark mode)
         working-directory: ${{ github.workspace }}
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-          S3_BUCKET: fin-trade-extract-nosubs-bucket
-          S3_FRED_PREFIX: fred/
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          FRED_DISABLE_WATERMARK: "true"
+          FRED_UPLOAD_TARGET: local
+          FRED_LOCAL_OUTPUT_DIR: /tmp/fred_data
           FRED_CONFIG_PATH: config/fred_series.yml
           FRED_DEFAULT_START_DATE: "1950-01-01"
           CATEGORY_FILTER: ${{ inputs.category_filter }}
           MAX_SERIES: ${{ inputs.max_series }}
         run: |
-          echo "Starting watermark-based FRED ETL"
+          echo "Starting no-watermark FRED ETL"
           if [ -n "$CATEGORY_FILTER" ]; then
             echo "Category filter: $CATEGORY_FILTER"
           fi
@@ -81,40 +67,13 @@ jobs:
           fi
           python scripts/etl/fetch_fred_watermark.py
 
-      - name: Load FRED data into Snowflake
-        working-directory: ${{ github.workspace }}
-        env:
-          S3_BUCKET: fin-trade-extract-nosubs-bucket
-          S3_FRED_PREFIX: fred/
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-        run: |
-          export S3_URI="s3://$S3_BUCKET/$S3_FRED_PREFIX"
-          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/load_fred_from_s3.sql
-
-      - name: Merge FRED raw to curated
-        working-directory: ${{ github.workspace }}
-        env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-        run: |
-          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/merge_fred_raw_to_curated.sql
-
-      - name: Clean up private key
-        if: always()
-        run: rm -f snowflake_rsa_key.der
-        working-directory: ${{ github.workspace }}
-
       - name: Upload processing results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fred-watermark-etl-results-${{ github.run_number }}
-          path: /tmp/fred_watermark_results.json
+          name: fred-etl-no-watermark-results-${{ github.run_number }}
+          path: |
+            /tmp/fred_watermark_results.json
+            /tmp/fred_data
+          if-no-files-found: warn
           retention-days: 30
