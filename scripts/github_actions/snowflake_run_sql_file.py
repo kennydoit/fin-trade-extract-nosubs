@@ -11,6 +11,23 @@ from cryptography.hazmat.primitives import serialization
 
 
 TOKEN_PATTERN = re.compile(r"\{\{(RAW|SQLSTR):([A-Z0-9_]+)\}\}")
+OPT_TOKEN_LINE = re.compile(r"^[^\n]*\{\{OPT:([A-Z0-9_]+)\}\}[^\n]*\n?", re.MULTILINE)
+
+
+def preprocess_optional_lines(sql_text: str) -> str:
+    """Remove lines with {{OPT:VAR}} tokens where VAR is unset or empty.
+    When VAR is set, replace {{OPT:VAR}} with {{SQLSTR:VAR}} for normal processing."""
+    result_lines = []
+    for line in sql_text.splitlines(keepends=True):
+        m = re.search(r"\{\{OPT:([A-Z0-9_]+)\}\}", line)
+        if m:
+            variable = m.group(1)
+            value = os.environ.get(variable, "")
+            if not value:
+                continue  # drop the line entirely
+            line = line.replace(f"{{{{OPT:{variable}}}}}", f"{{{{SQLSTR:{variable}}}}}")
+        result_lines.append(line)
+    return "".join(result_lines)
 
 
 def load_private_key_bytes() -> bytes:
@@ -37,6 +54,8 @@ def sql_escape(value: str) -> str:
 
 
 def render_sql_template(sql_text: str) -> str:
+    sql_text = preprocess_optional_lines(sql_text)
+
     def replace_token(match: re.Match) -> str:
         mode, variable = match.group(1), match.group(2)
         value = os.environ.get(variable)
