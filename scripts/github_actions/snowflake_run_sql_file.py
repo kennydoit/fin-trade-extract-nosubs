@@ -66,14 +66,19 @@ def main() -> int:
         print(str(exc))
         return 1
 
-    conn = snowflake.connector.connect(
-        account=os.environ["SNOWFLAKE_ACCOUNT"],
-        user=os.environ["SNOWFLAKE_USER"],
-        private_key=load_private_key_bytes(),
-        database=os.environ["SNOWFLAKE_DATABASE"],
-        schema=os.environ["SNOWFLAKE_SCHEMA"],
-        warehouse=os.environ["SNOWFLAKE_WAREHOUSE"],
-    )
+    conn_params = {
+        "account": os.environ["SNOWFLAKE_ACCOUNT"],
+        "user": os.environ["SNOWFLAKE_USER"],
+        "private_key": load_private_key_bytes(),
+        "database": os.environ["SNOWFLAKE_DATABASE"],
+        "schema": os.environ["SNOWFLAKE_SCHEMA"],
+        "warehouse": os.environ["SNOWFLAKE_WAREHOUSE"],
+    }
+    role = os.environ.get("SNOWFLAKE_ROLE")
+    if role:
+        conn_params["role"] = role
+
+    conn = snowflake.connector.connect(**conn_params)
 
     try:
         conn.execute_string(rendered_sql)
