@@ -50,6 +50,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FRED_API_KEY_VAR: ${{ vars.FRED_API_KEY }}
           FRED_DISABLE_WATERMARK: "true"
           FRED_UPLOAD_TARGET: local
           FRED_LOCAL_OUTPUT_DIR: /tmp/fred_data
@@ -59,10 +60,23 @@ jobs:
           MAX_SERIES: ${{ inputs.max_series }}
         run: |
           echo "Starting no-watermark FRED ETL"
+          if [ -z "$FRED_API_KEY" ] && [ -n "$FRED_API_KEY_VAR" ]; then
+            echo "Using FRED_API_KEY from repository variable fallback (vars.FRED_API_KEY)."
+            FRED_API_KEY="$FRED_API_KEY_VAR"
+          fi
+
           KEY_LEN=${#FRED_API_KEY}
           if ! [[ "$FRED_API_KEY" =~ ^[a-z0-9]{32}$ ]]; then
             echo "Invalid FRED_API_KEY format (length: $KEY_LEN)."
-            echo "Expected 32 lower-case alpha-numeric characters; check repo secret FRED_API_KEY for quotes, spaces, or newlines."
+            if [ "$KEY_LEN" -eq 0 ]; then
+              echo "No key value reached the job. Check these in order:"
+              echo "1) Repo/Org secret named exactly FRED_API_KEY exists"
+              echo "2) If using Environment secrets, set the job environment so those secrets are in scope"
+              echo "3) Run source is not a fork context where secrets are blocked"
+              echo "4) Optional fallback: set repository variable vars.FRED_API_KEY"
+            else
+              echo "Expected 32 lower-case alpha-numeric characters; check FRED_API_KEY for quotes, spaces, or newlines."
+            fi
             exit 1
           fi
           if [ -n "$CATEGORY_FILTER" ]; then
