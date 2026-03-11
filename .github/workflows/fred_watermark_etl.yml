@@ -56,6 +56,7 @@ jobs:
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FRED_API_KEY_VAR: ${{ vars.FRED_API_KEY }}
+          TEST_SECRET: ${{ secrets.TEST_SECRET }}
           FRED_DISABLE_WATERMARK: "true"
           FRED_UPLOAD_TARGET: local
           FRED_LOCAL_OUTPUT_DIR: /tmp/fred_data
@@ -68,6 +69,7 @@ jobs:
           echo "Starting no-watermark FRED ETL"
           echo "::add-mask::$FRED_API_KEY"
           echo "::add-mask::$FRED_API_KEY_VAR"
+          echo "::add-mask::$TEST_SECRET"
 
           KEY_SOURCE="secrets.FRED_API_KEY"
           if [ -z "$FRED_API_KEY" ] && [ -n "$FRED_API_KEY_VAR" ]; then
@@ -94,6 +96,20 @@ jobs:
             echo "- length: $KEY_LEN"
             echo "- matches_expected_pattern: $LOWER_ALNUM_MATCH"
             echo "- sha256_12: $KEY_FINGERPRINT"
+
+            TEST_SECRET_LEN=${#TEST_SECRET}
+            if [ "$TEST_SECRET_LEN" -gt 0 ]; then
+              TEST_SECRET_FINGERPRINT=$(printf '%s' "$TEST_SECRET" | sha256sum | cut -c1-12)
+              TEST_SECRET_PRESENT="true"
+            else
+              TEST_SECRET_FINGERPRINT="empty"
+              TEST_SECRET_PRESENT="false"
+            fi
+
+            echo "TEST_SECRET diagnostics:"
+            echo "- present: $TEST_SECRET_PRESENT"
+            echo "- length: $TEST_SECRET_LEN"
+            echo "- sha256_12: $TEST_SECRET_FINGERPRINT"
           fi
 
           KEY_LEN=${#FRED_API_KEY}
