@@ -19,6 +19,11 @@ on:
         description: "Optional max number of series to process"
         required: false
         type: number
+      debug_key_check:
+        description: "Print safe FRED key diagnostics (never raw key)"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # Daily at 23:00 UTC
     - cron: "0 23 * * *"
@@ -58,11 +63,37 @@ jobs:
           FRED_DEFAULT_START_DATE: "1950-01-01"
           CATEGORY_FILTER: ${{ inputs.category_filter }}
           MAX_SERIES: ${{ inputs.max_series }}
+          FRED_DEBUG_KEY_CHECK: ${{ inputs.debug_key_check }}
         run: |
           echo "Starting no-watermark FRED ETL"
+          echo "::add-mask::$FRED_API_KEY"
+          echo "::add-mask::$FRED_API_KEY_VAR"
+
+          KEY_SOURCE="secrets.FRED_API_KEY"
           if [ -z "$FRED_API_KEY" ] && [ -n "$FRED_API_KEY_VAR" ]; then
             echo "Using FRED_API_KEY from repository variable fallback (vars.FRED_API_KEY)."
             FRED_API_KEY="$FRED_API_KEY_VAR"
+            KEY_SOURCE="vars.FRED_API_KEY"
+            echo "::add-mask::$FRED_API_KEY"
+          fi
+
+          if [ "$FRED_DEBUG_KEY_CHECK" = "true" ]; then
+            KEY_LEN=${#FRED_API_KEY}
+            LOWER_ALNUM_MATCH="false"
+            if [[ "$FRED_API_KEY" =~ ^[a-z0-9]{32}$ ]]; then
+              LOWER_ALNUM_MATCH="true"
+            fi
+            if [ "$KEY_LEN" -gt 0 ]; then
+              KEY_FINGERPRINT=$(printf '%s' "$FRED_API_KEY" | sha256sum | cut -c1-12)
+            else
+              KEY_FINGERPRINT="empty"
+            fi
+
+            echo "FRED key diagnostics:"
+            echo "- source: $KEY_SOURCE"
+            echo "- length: $KEY_LEN"
+            echo "- matches_expected_pattern: $LOWER_ALNUM_MATCH"
+            echo "- sha256_12: $KEY_FINGERPRINT"
           fi
 
           KEY_LEN=${#FRED_API_KEY}
