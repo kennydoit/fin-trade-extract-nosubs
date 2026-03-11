@@ -1,0 +1,19 @@
+# Snowflake RSA key files - never commit these
+snowflake_rsa_key.pem
+snowflake_rsa_key.der
+snowflake_rsa_key_pub.pem
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+
+# Local FRED data output
+/tmp/fred_data/

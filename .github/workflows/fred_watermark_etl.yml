@@ -86,6 +86,47 @@ jobs:
           fi
           python scripts/etl/fetch_fred_watermark.py
 
+      - name: Set up Snowflake private key
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY_B64 }}" | base64 --decode > snowflake_rsa_key.der
+
+      - name: Create table and load FRED data from S3
+        working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          S3_URI: s3://fin-trade-extract-nosubs-bucket/fred/
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/load_fred_from_s3.sql
+
+      - name: Merge FRED raw to curated
+        working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/merge_fred_raw_to_curated.sql
+
+      - name: Suspend Snowflake warehouse
+        if: always()
+        working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/suspend_warehouse.sql
+
       - name: Upload processing results
         if: always()
         uses: actions/upload-artifact@v4
