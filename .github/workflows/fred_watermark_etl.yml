@@ -59,6 +59,12 @@ jobs:
           MAX_SERIES: ${{ inputs.max_series }}
         run: |
           echo "Starting no-watermark FRED ETL"
+          KEY_LEN=${#FRED_API_KEY}
+          if ! [[ "$FRED_API_KEY" =~ ^[a-z0-9]{32}$ ]]; then
+            echo "Invalid FRED_API_KEY format (length: $KEY_LEN)."
+            echo "Expected 32 lower-case alpha-numeric characters; check repo secret FRED_API_KEY for quotes, spaces, or newlines."
+            exit 1
+          fi
           if [ -n "$CATEGORY_FILTER" ]; then
             echo "Category filter: $CATEGORY_FILTER"
           fi

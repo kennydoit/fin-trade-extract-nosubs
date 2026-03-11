@@ -35,6 +35,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def normalize_fred_api_key(raw_value: str) -> str:
+    """Normalize and validate a FRED API key from environment variables."""
+    key = raw_value.strip()
+
+    # Some secret managers may accidentally include wrapping quotes.
+    if (key.startswith('"') and key.endswith('"')) or (key.startswith("'") and key.endswith("'")):
+        key = key[1:-1].strip()
+
+    if not re.fullmatch(r"[a-z0-9]{32}", key):
+        raise ValueError(
+            "FRED_API_KEY must be a 32-character lower-case alpha-numeric string. "
+            "Check your GitHub secret for extra spaces, newlines, or quotes."
+        )
+
+    return key
+
+
 class FredWatermarkManager:
     """Manages watermark and extraction log state in Snowflake."""
 
@@ -449,7 +466,15 @@ def build_snowflake_config() -> Dict[str, object]:
 def main() -> None:
     logger.info("Starting FRED watermark ETL")
 
-    fred_api_key = os.environ["FRED_API_KEY"]
+    try:
+        fred_api_key = normalize_fred_api_key(os.environ["FRED_API_KEY"])
+    except KeyError:
+        logger.error("Missing required environment variable: FRED_API_KEY")
+        sys.exit(1)
+    except ValueError as exc:
+        logger.error(str(exc))
+        sys.exit(1)
+
     disable_watermark = os.environ.get("FRED_DISABLE_WATERMARK", "false").lower() == "true"
     upload_target = os.environ.get("FRED_UPLOAD_TARGET", "s3").lower()
     local_output_dir = os.environ.get("FRED_LOCAL_OUTPUT_DIR", "/tmp/fred_data")
