@@ -46,13 +46,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3 pyyaml fredapi pandas snowflake-connector-python cryptography
 
-      - name: Fetch FRED data (no watermark mode)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Clear S3 bucket prefix before run
+        run: |
+          echo "Clearing s3://fin-trade-extract-nosubs-bucket/fred/"
+          aws s3 rm s3://fin-trade-extract-nosubs-bucket/fred/ --recursive
+          echo "S3 prefix cleared."
+
+      - name: Fetch FRED data and upload to S3
         working-directory: ${{ github.workspace }}
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FRED_DISABLE_WATERMARK: "true"
-          FRED_UPLOAD_TARGET: local
-          FRED_LOCAL_OUTPUT_DIR: /tmp/fred_data
+          FRED_UPLOAD_TARGET: s3
+          S3_BUCKET: fin-trade-extract-nosubs-bucket
+          S3_FRED_PREFIX: fred/
           FRED_CONFIG_PATH: config/fred_series.yml
           FRED_DEFAULT_START_DATE: "1950-01-01"
           CATEGORY_FILTER: ${{ inputs.category_filter }}
