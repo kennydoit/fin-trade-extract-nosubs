@@ -1,6 +1,7 @@
 boto3
 cryptography
 fredapi
+openpyxl
 pandas
 PyYAML
 snowflake-connector-python
