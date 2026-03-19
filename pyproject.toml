@@ -1,0 +1,18 @@
+[project]
+name = "fin-trade-extract-nosubs"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3",
+    "cryptography",
+    "fredapi",
+    "openpyxl",
+    "pandas",
+    "python-dotenv",
+    "PyYAML",
+    "requests",
+    "snowflake-connector-python[pandas]",
+    "yfinance",
+]

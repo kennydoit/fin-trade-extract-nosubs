@@ -1,0 +1,8 @@
+
+-------------------------------
+FBI MOST WANTED
+FBI MOST WANTED API:  https://www.fbi.gov/wanted/api
+API REFERENCE: https://docs.python-requests.org/en/latest/user/quickstart/#response-content
+API KEY: SEE DATA_GOV_API_KEY IN .ENV FILE
+
+

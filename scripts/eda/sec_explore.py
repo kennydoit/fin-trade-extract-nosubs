@@ -7,7 +7,8 @@ workbook to eda/data/sec_filings_eda.xlsx containing:
   - Listing  : table metadata (name, last updated, row count)
   - <TableN> : random sample of up to 1,000 rows for each table
 
-Environment variables required (same as other scripts in this repo):
+Reads credentials from a .env file in the workspace root (or environment).
+Required variables:
   SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_WAREHOUSE
   SNOWFLAKE_PRIVATE_KEY_PATH  (default: snowflake_rsa_key.der)
   SNOWFLAKE_ROLE              (optional)
@@ -15,13 +16,19 @@ Environment variables required (same as other scripts in this repo):
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 import pandas as pd
 import snowflake.connector
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+
+# Load .env from workspace root (no-op if file absent or vars already set)
+_WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(_WORKSPACE_ROOT / ".env")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,7 +41,7 @@ SCHEMA = "CYBERSYN"
 SAMPLE_ROWS = 1000
 
 # Resolves to <workspace_root>/eda/data/sec_filings_eda.xlsx
-OUTPUT_PATH = Path(__file__).resolve().parents[2] / "eda" / "data" / "sec_filings_eda.xlsx"
+OUTPUT_PATH = _WORKSPACE_ROOT / "eda" / "data" / "sec_filings_eda.xlsx"
 
 
 def load_private_key_bytes() -> bytes:
@@ -87,35 +94,49 @@ def safe_sheet_name(name: str, used: set) -> str:
 
 
 def fetch_table_listing(conn: snowflake.connector.SnowflakeConnection) -> pd.DataFrame:
-    sql = f"""
-        SELECT
-            TABLE_NAME,
-            LAST_ALTERED  AS LAST_UPDATED,
-            ROW_COUNT     AS NUMBER_OF_ROWS
-        FROM {DATABASE}.INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = '{SCHEMA}'
-          AND TABLE_TYPE   = 'BASE TABLE'
-        ORDER BY TABLE_NAME
-    """
-    logger.info("Fetching table listing from %s.INFORMATION_SCHEMA.TABLES...", DATABASE)
+    # Cybersyn Marketplace data is exposed as views, not base tables.
+    logger.info("Fetching view listing via SHOW VIEWS IN SCHEMA %s.%s...", DATABASE, SCHEMA)
     cursor = conn.cursor()
-    cursor.execute(sql)
-    df = cursor.fetch_pandas_all()
+    cursor.execute(f"SHOW VIEWS IN SCHEMA {DATABASE}.{SCHEMA}")
+    cursor.execute('SELECT "name", "created_on" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))')
+    rows = cursor.fetchall()
+    col_names = [desc[0] for desc in cursor.description]
     cursor.close()
+
+    df = pd.DataFrame(rows, columns=col_names)
+    df = df.rename(columns={"name": "TABLE_NAME", "created_on": "LAST_UPDATED"})
+    # Excel doesn't support tz-aware datetimes — strip timezone info
+    if pd.api.types.is_datetime64_any_dtype(df["LAST_UPDATED"]):
+        df["LAST_UPDATED"] = df["LAST_UPDATED"].dt.tz_localize(None)
+    df = df.sort_values("TABLE_NAME").reset_index(drop=True)
+    logger.info("Found %d views", len(df))
     return df
 
 
 def fetch_table_sample(
     conn: snowflake.connector.SnowflakeConnection, table_name: str
 ) -> pd.DataFrame:
-    # SAMPLE (n ROWS) uses Snowflake's block sampling — much faster than ORDER BY RANDOM()
-    # on large tables while still providing a representative random subset.
-    sql = f'SELECT * FROM {DATABASE}.{SCHEMA}."{table_name}" SAMPLE ({SAMPLE_ROWS} ROWS)'
+    # Views don't support block sampling; use LIMIT with ORDER BY RANDOM() on a
+    # subquery capped at 100k rows so the shuffle stays fast on large views.
+    sql = f"""
+        SELECT * FROM (
+            SELECT * FROM {DATABASE}.{SCHEMA}."{table_name}" LIMIT 100000
+        ) ORDER BY RANDOM() LIMIT {SAMPLE_ROWS}
+    """
     logger.info("Sampling up to %d rows from %s...", SAMPLE_ROWS, table_name)
     cursor = conn.cursor()
     cursor.execute(sql)
     df = cursor.fetch_pandas_all()
     cursor.close()
+    # Strip timezone from any datetime columns so Excel can accept them
+    for col in df.select_dtypes(include=["datetimetz"]).columns:
+        df[col] = df[col].dt.tz_localize(None)
+    # Remove illegal XML/Excel characters (control chars except tab/newline) from string columns
+    _illegal_xml = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+    for col in df.select_dtypes(include=["object"]).columns:
+        df[col] = df[col].apply(
+            lambda v: _illegal_xml.sub("", v) if isinstance(v, str) else v
+        )
     return df
 
 
@@ -134,7 +155,7 @@ def main() -> int:
     try:
         listing_df = fetch_table_listing(conn)
         table_names: list = listing_df["TABLE_NAME"].tolist()
-        logger.info("Found %d tables in %s.%s", len(table_names), DATABASE, SCHEMA)
+        logger.info("Processing %d views in %s.%s", len(table_names), DATABASE, SCHEMA)
 
         used_sheet_names: set = {"Listing"}
 
