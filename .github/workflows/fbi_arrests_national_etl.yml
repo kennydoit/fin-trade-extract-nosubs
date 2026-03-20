@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     permissions:
-      id-token: write
       contents: read
     env:
       PYTHONUNBUFFERED: "1"
@@ -29,19 +28,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3 requests snowflake-connector-python cryptography
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-
       - name: Fetch FBI national arrests and upload to S3
         working-directory: ${{ github.workspace }}
         env:
           DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
           S3_BUCKET: fin-trade-extract-nosubs-bucket
           S3_FBI_PREFIX: fbi/
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           echo "::add-mask::$DATA_GOV_API_KEY"
           python scripts/etl/fetch_fbi_arrests_national.py
