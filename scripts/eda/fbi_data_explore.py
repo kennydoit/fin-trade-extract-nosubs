@@ -123,7 +123,7 @@ def api_get(path: str, params: dict | None = None, timeout: int = 30) -> Any:
         )
         return None
 
-    query = {"api_key": API_KEY, **(params or {})}
+    query = {"API_KEY": API_KEY, **(params or {})}
     url = BASE_URL + path
 
     try:
@@ -405,7 +405,7 @@ def hate_crimes() -> pd.DataFrame | None:
     records = []
     for state in SAMPLE_STATES:
         path = f"/hate-crime/state/{state}"
-        data = api_get(path)
+        data = api_get(path, {"from": FROM_YEAR, "to": TO_YEAR})
         df = _to_df(data, path)
         if df is None:
             log.info("  Skipping hate crime %s — no data.", state)
