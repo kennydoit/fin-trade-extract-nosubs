@@ -160,11 +160,13 @@ def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict
     # Aggregate monthly values ("MM-YYYY") to annual totals
     annual: dict[int, float] = {}
     for date_str, count in series.items():
+        if count is None:
+            continue
         try:
             year = int(date_str.split("-")[1])  # "MM-YYYY" -> YYYY
             annual[year] = annual.get(year, 0.0) + float(count)
-        except (ValueError, IndexError):
-            log.warning("Could not parse date '%s' for offense %d", date_str, offense_code)
+        except (ValueError, IndexError, TypeError):
+            log.warning("Could not parse date '%s' or count for offense %d", date_str, offense_code)
 
     rows = []
     for year, total in sorted(annual.items()):
