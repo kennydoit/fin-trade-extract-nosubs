@@ -119,11 +119,15 @@ def api_get(path: str, params: dict | None = None, timeout: int = 30) -> Any:
 def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict]:
     """Fetch national arrest counts for one offense code.
 
-    The API returns either:
-      • {"data": [{data_year, value, ...}, ...], ...}
-      • [{data_year, value, ...}, ...]
+    The API returns:
+      {
+        "actuals": {"United States Arrests": {"MM-YYYY": count, ...}},
+        "rates":   {"United States Arrests": {"MM-YYYY": rate,  ...}},
+        ...
+      }
 
-    Each row is enriched with ``offense_code`` and ``extracted_at``.
+    Monthly counts are summed by year and returned as one row per year,
+    enriched with ``offense_code`` and ``extracted_at``.
     """
     path = f"/arrest/national/{offense_code}"
     params = {"type": "counts", "from": FROM_DATE, "to": TO_DATE}
@@ -132,26 +136,44 @@ def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict
     if payload is None:
         return []
 
-    # Normalise response shape
-    if isinstance(payload, dict):
-        raw_rows = payload.get("data", [])
-        if not isinstance(raw_rows, list):
-            log.warning("Unexpected 'data' shape for offense %d: %s", offense_code, type(raw_rows))
-            return []
-    elif isinstance(payload, list):
-        raw_rows = payload
-    else:
+    if not isinstance(payload, dict):
         log.warning("Unexpected payload shape for offense %d: %s", offense_code, type(payload))
         return []
 
+    # actuals -> {"United States Arrests": {"MM-YYYY": count, ...}}
+    actuals = payload.get("actuals", {})
+    if not isinstance(actuals, dict):
+        log.warning("Unexpected 'actuals' shape for offense %d: %s", offense_code, type(actuals))
+        return []
+
+    # Grab the first (and typically only) series dict
+    series: dict | None = None
+    for v in actuals.values():
+        if isinstance(v, dict):
+            series = v
+            break
+
+    if not series:
+        log.warning("No actuals series found for offense %d", offense_code)
+        return []
+
+    # Aggregate monthly values ("MM-YYYY") to annual totals
+    annual: dict[int, float] = {}
+    for date_str, count in series.items():
+        try:
+            year = int(date_str.split("-")[1])  # "MM-YYYY" -> YYYY
+            annual[year] = annual.get(year, 0.0) + float(count)
+        except (ValueError, IndexError):
+            log.warning("Could not parse date '%s' for offense %d", date_str, offense_code)
+
     rows = []
-    for item in raw_rows:
-        if not isinstance(item, dict):
-            continue
-        record = dict(item)
-        record["offense_code"] = offense_code
-        record["extracted_at"] = extracted_at
-        rows.append(record)
+    for year, total in sorted(annual.items()):
+        rows.append({
+            "data_year":    year,
+            "value":        total,
+            "offense_code": offense_code,
+            "extracted_at": extracted_at,
+        })
 
     return rows
 
