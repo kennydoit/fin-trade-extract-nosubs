@@ -48,6 +48,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3 pyyaml fredapi pandas snowflake-connector-python cryptography
 
+      - name: Verify AWS credentials
+        run: |
+          echo "AWS_ACCESS_KEY_ID first 4 chars: ${AWS_ACCESS_KEY_ID:0:4}"
+          echo "AWS_ACCESS_KEY_ID length: ${#AWS_ACCESS_KEY_ID}"
+          echo "AWS_SECRET_ACCESS_KEY length: ${#AWS_SECRET_ACCESS_KEY}"
+
       - name: Clear S3 bucket prefix before run
         run: |
           echo "Clearing s3://fin-trade-extract-nosubs-bucket/fred/"
