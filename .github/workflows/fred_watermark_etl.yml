@@ -89,12 +89,12 @@ jobs:
       - name: Create table and load FRED data from S3
         working-directory: ${{ github.workspace }}
         env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
           S3_URI: s3://fin-trade-extract-nosubs-bucket/fred/
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -104,12 +104,12 @@ jobs:
       - name: Merge FRED raw to curated
         working-directory: ${{ github.workspace }}
         env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
         run: |
           python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/merge_fred_raw_to_curated.sql
 
@@ -117,12 +117,12 @@ jobs:
         if: always()
         working-directory: ${{ github.workspace }}
         env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
         run: |
           python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/suspend_warehouse.sql
 

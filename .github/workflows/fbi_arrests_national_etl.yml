@@ -49,12 +49,12 @@ jobs:
       - name: Load FBI arrests from S3 into Snowflake RAW
         working-directory: ${{ github.workspace }}
         env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
           S3_FBI_ARRESTS_NATIONAL_URI: s3://fin-trade-extract-nosubs-bucket/fbi/arrests/national/
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -64,11 +64,11 @@ jobs:
       - name: Merge FBI arrests RAW to CURATED
         working-directory: ${{ github.workspace }}
         env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
         run: |
           python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/merge_fbi_arrests_national_raw_to_curated.sql
