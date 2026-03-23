@@ -76,6 +76,10 @@ FROM_DATE     = "01-1999"
 TO_DATE       = "03-2026"
 REQUEST_DELAY = 0.25  # seconds between requests
 
+# Optional single-state filter — set via FBI_STATE_FILTER env var.
+# "ALL" or empty string means process every state.
+STATE_FILTER  = os.environ.get("FBI_STATE_FILTER", "ALL").upper().strip() or "ALL"
+
 STATE_CODES = [
     "AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL",
     "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA",
@@ -216,19 +220,42 @@ def main() -> None:
 
     unique_states  = list(dict.fromkeys(STATE_CODES))
     unique_codes   = list(dict.fromkeys(OFFENSE_CODES))
+
+    # Apply optional single-state filter
+    if STATE_FILTER != "ALL":
+        if STATE_FILTER not in unique_states:
+            log.error("Unknown state '%s'. Valid options: %s", STATE_FILTER, unique_states)
+            sys.exit(1)
+        unique_states = [STATE_FILTER]
+        log.info("Filtering to single state: %s", STATE_FILTER)
+
     total_combos   = len(unique_states) * len(unique_codes)
+    n_states       = len(unique_states)
+    n_codes        = len(unique_codes)
 
-    log.info("Processing %d states × %d offense codes = %d API calls …",
-             len(unique_states), len(unique_codes), total_combos)
+    log.info("Processing %d state(s) × %d offense codes = %d API calls …",
+             n_states, n_codes, total_combos)
 
-    all_rows = []
-    failed   = []
-    combo    = 0
+    all_rows       = []
+    failed         = []
+    combos_done    = 0
 
-    for state in unique_states:
+    for state_idx, state in enumerate(unique_states, start=1):
+        state_combos_done      = (state_idx - 1) * n_codes
+        state_combos_remaining = total_combos - state_combos_done
+        log.info(
+            "[State %d/%d] %-2s — combos completed: %d | remaining: %d",
+            state_idx, n_states, state,
+            state_combos_done, state_combos_remaining,
+        )
+
         for code in unique_codes:
-            combo += 1
-            log.info("  [%d/%d] %s / offense %d …", combo, total_combos, state, code)
+            combos_done += 1
+            combos_remaining = total_combos - combos_done
+            log.info(
+                "  [%d/%d] state=%-2s  offense=%-4d  remaining=%d",
+                combos_done, total_combos, state, code, combos_remaining,
+            )
             rows = fetch_arrests_for_state_offense(state, code, extracted_at)
 
             if not rows:

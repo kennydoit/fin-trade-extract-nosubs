@@ -2,9 +2,65 @@ name: FBI Arrests State ETL
 
 "on":
   workflow_dispatch:
-  schedule:
-    # Monthly on the 2nd at 02:00 UTC (offset from national to avoid overlap)
-    - cron: "0 2 2 * *"
+    inputs:
+      state:
+        description: 'State abbreviation to fetch (ALL = every state)'
+        required: false
+        default: 'ALL'
+        type: choice
+        options:
+          - ALL
+          - AK
+          - AL
+          - AR
+          - AZ
+          - CA
+          - CO
+          - CT
+          - DC
+          - DE
+          - FL
+          - GA
+          - HI
+          - IA
+          - ID
+          - IL
+          - IN
+          - KS
+          - KY
+          - LA
+          - MA
+          - MD
+          - ME
+          - MI
+          - MN
+          - MO
+          - MS
+          - MT
+          - NC
+          - ND
+          - NE
+          - NH
+          - NJ
+          - NM
+          - NV
+          - NY
+          - OH
+          - OK
+          - OR
+          - PA
+          - RI
+          - SC
+          - SD
+          - TN
+          - TX
+          - UT
+          - VA
+          - VT
+          - WA
+          - WI
+          - WV
+          - WY
 
 jobs:
   fbi-arrests-state-etl:
@@ -37,6 +93,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
+          FBI_STATE_FILTER: ${{ github.event.inputs.state }}
         run: |
           echo "::add-mask::$DATA_GOV_API_KEY"
           python scripts/etl/fetch_fbi_arrests_state.py
