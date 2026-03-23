@@ -1,0 +1,76 @@
+name: FBI Arrests State ETL
+
+"on":
+  workflow_dispatch:
+  schedule:
+    # Monthly on the 2nd at 02:00 UTC (offset from national to avoid overlap)
+    - cron: "0 2 2 * *"
+
+jobs:
+  fbi-arrests-state-etl:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3 requests snowflake-connector-python cryptography
+
+      - name: Fetch FBI state arrests and upload to S3
+        working-directory: ${{ github.workspace }}
+        env:
+          DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+          S3_BUCKET: fin-trade-extract-nosubs-bucket
+          S3_FBI_PREFIX: fbi/
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          echo "::add-mask::$DATA_GOV_API_KEY"
+          python scripts/etl/fetch_fbi_arrests_state.py
+
+      - name: Set up Snowflake private key
+        working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_PRIVATE_KEY_B64: ${{ secrets.SNOWFLAKE_PRIVATE_KEY_B64 }}
+        run: |
+          printf '%s' "$SNOWFLAKE_PRIVATE_KEY_B64" | base64 --decode > snowflake_rsa_key.der
+
+      - name: Load FBI state arrests from S3 into Snowflake RAW
+        working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
+          S3_FBI_ARRESTS_STATE_URI: s3://fin-trade-extract-nosubs-bucket/fbi/arrests/state/
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/load_fbi_arrests_state_from_s3.sql
+
+      - name: Merge FBI state arrests RAW to CURATED
+        working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_ACCOUNT: GIDLNKY-MBC80835
+          SNOWFLAKE_USER: SPECIALKEYEVERYDAY
+          SNOWFLAKE_DATABASE: FIN_TRADE_EXTRACT_NOSUBS
+          SNOWFLAKE_SCHEMA: RAW
+          SNOWFLAKE_WAREHOUSE: FIN_TRADE_WH
+          SNOWFLAKE_ROLE: ETL_ROLE
+        run: |
+          python scripts/github_actions/snowflake_run_sql_file.py snowflake/runbooks/merge_fbi_arrests_state_raw_to_curated.sql

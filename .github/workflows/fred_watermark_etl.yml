@@ -1,6 +1,6 @@
 name: FRED ETL - No Watermark (Temporary)
 
-on:
+"on":
   push:
     branches:
       - main

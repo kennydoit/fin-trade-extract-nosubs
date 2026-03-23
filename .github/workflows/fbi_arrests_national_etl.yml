@@ -1,6 +1,6 @@
 name: FBI Arrests National ETL
 
-on:
+"on":
   workflow_dispatch:
   schedule:
     # Monthly on the 1st at 02:00 UTC
