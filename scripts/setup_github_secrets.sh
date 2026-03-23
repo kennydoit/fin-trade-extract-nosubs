@@ -54,7 +54,7 @@ set_secret() {
   local name="$1"
   local val="$2"
   echo "  → Setting $name"
-  printf '%s' "$val" | gh secret set "$name" --repo "$REPO" --body -
+  gh secret set "$name" --repo "$REPO" -b "$val"
 }
 
 echo "=== Setting GitHub repository secrets for $REPO ==="
