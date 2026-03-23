@@ -44,7 +44,9 @@ FORCE = TRUE;
 -- Step 5: Verify load — count rows per offense code
 SELECT
     RAW_DATA:offense_code::INTEGER  AS offense_code,
-    COUNT(*)                        AS row_count
+    COUNT(*)                        AS row_count,
+    MIN(RAW_DATA:observation_date::DATE) AS earliest_month,
+    MAX(RAW_DATA:observation_date::DATE) AS latest_month
 FROM FBI_ARRESTS_NATIONAL_RAW
 GROUP BY offense_code
 ORDER BY offense_code;

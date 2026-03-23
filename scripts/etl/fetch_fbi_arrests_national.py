@@ -126,8 +126,8 @@ def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict
         ...
       }
 
-    Monthly counts are summed by year and returned as one row per year,
-    enriched with ``offense_code`` and ``extracted_at``.
+    Each MM-YYYY entry is emitted as a separate row with an ISO observation_date
+    (first day of that month), preserving full monthly granularity.
     """
     path = f"/arrest/national/{offense_code}"
     params = {"type": "counts", "from": FROM_DATE, "to": TO_DATE}
@@ -157,25 +157,21 @@ def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict
         log.warning("No actuals series found for offense %d", offense_code)
         return []
 
-    # Aggregate monthly values ("MM-YYYY") to annual totals
-    annual: dict[int, float] = {}
-    for date_str, count in series.items():
+    rows = []
+    for date_str, count in sorted(series.items(), key=lambda x: (x[0].split("-")[1], x[0].split("-")[0])):
         if count is None:
             continue
         try:
-            year = int(date_str.split("-")[1])  # "MM-YYYY" -> YYYY
-            annual[year] = annual.get(year, 0.0) + float(count)
+            month_str, year_str = date_str.split("-")  # "MM-YYYY"
+            observation_date = f"{year_str}-{month_str}-01"
+            rows.append({
+                "observation_date": observation_date,
+                "value":            float(count),
+                "offense_code":     offense_code,
+                "extracted_at":     extracted_at,
+            })
         except (ValueError, IndexError, TypeError):
             log.warning("Could not parse date '%s' or count for offense %d", date_str, offense_code)
-
-    rows = []
-    for year, total in sorted(annual.items()):
-        rows.append({
-            "data_year":    year,
-            "value":        total,
-            "offense_code": offense_code,
-            "extracted_at": extracted_at,
-        })
 
     return rows
 
