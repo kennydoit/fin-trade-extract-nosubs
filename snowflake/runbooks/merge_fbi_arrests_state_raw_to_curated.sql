@@ -26,9 +26,6 @@ CREATE TABLE IF NOT EXISTS CURATED_FBI.ARRESTS_STATE (
     PRIMARY KEY (STATE, OFFENSE_CODE, OBSERVATION_DATE)
 );
 
--- NOTE: if the table already existed before this PK was defined, run once manually in Snowflake:
---   ALTER TABLE CURATED_FBI.ARRESTS_STATE ADD PRIMARY KEY (STATE, OFFENSE_CODE, OBSERVATION_DATE);
-
 -- ---------------------------------------------------------------------------
 -- Deduplicated view of the raw table (latest extract wins)
 -- ---------------------------------------------------------------------------
