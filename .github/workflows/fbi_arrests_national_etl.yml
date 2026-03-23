@@ -43,8 +43,10 @@ jobs:
 
       - name: Set up Snowflake private key
         working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_PRIVATE_KEY_B64: ${{ secrets.SNOWFLAKE_PRIVATE_KEY_B64 }}
         run: |
-          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY_B64 }}" | base64 --decode > snowflake_rsa_key.der
+          printf '%s' "$SNOWFLAKE_PRIVATE_KEY_B64" | base64 --decode > snowflake_rsa_key.der
 
       - name: Load FBI arrests from S3 into Snowflake RAW
         working-directory: ${{ github.workspace }}

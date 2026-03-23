@@ -83,8 +83,10 @@ jobs:
 
       - name: Set up Snowflake private key
         working-directory: ${{ github.workspace }}
+        env:
+          SNOWFLAKE_PRIVATE_KEY_B64: ${{ secrets.SNOWFLAKE_PRIVATE_KEY_B64 }}
         run: |
-          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY_B64 }}" | base64 --decode > snowflake_rsa_key.der
+          printf '%s' "$SNOWFLAKE_PRIVATE_KEY_B64" | base64 --decode > snowflake_rsa_key.der
 
       - name: Create table and load FRED data from S3
         working-directory: ${{ github.workspace }}
