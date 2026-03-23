@@ -28,25 +28,24 @@ CREATE TABLE IF NOT EXISTS CURATED_FBI.ARRESTS_STATE (
 -- ---------------------------------------------------------------------------
 -- Deduplicated view of the raw table (latest extract wins)
 -- ---------------------------------------------------------------------------
-WITH RANKED AS (
-    SELECT
-        STATE,
-        OFFENSE_CODE,
-        TRY_TO_DATE(OBSERVATION_DATE)    AS OBSERVATION_DATE,
-        VALUE,
-        TRY_TO_TIMESTAMP_TZ(EXTRACTED_AT) AS EXTRACTED_AT,
-        SOURCE_FILE,
-        ROW_NUMBER() OVER (
-            PARTITION BY STATE, OFFENSE_CODE, OBSERVATION_DATE
-            ORDER BY TRY_TO_TIMESTAMP_TZ(EXTRACTED_AT) DESC NULLS LAST,
-                     LOADED_AT                         DESC NULLS LAST
-        ) AS RN
-    FROM RAW_FBI.FBI_ARRESTS_STATE_RAW
-    WHERE OBSERVATION_DATE IS NOT NULL
-)
-
 MERGE INTO CURATED_FBI.ARRESTS_STATE AS TGT
 USING (
+    WITH RANKED AS (
+        SELECT
+            STATE,
+            OFFENSE_CODE,
+            TRY_TO_DATE(OBSERVATION_DATE)     AS OBSERVATION_DATE,
+            VALUE,
+            TRY_TO_TIMESTAMP_TZ(EXTRACTED_AT) AS EXTRACTED_AT,
+            SOURCE_FILE,
+            ROW_NUMBER() OVER (
+                PARTITION BY STATE, OFFENSE_CODE, OBSERVATION_DATE
+                ORDER BY TRY_TO_TIMESTAMP_TZ(EXTRACTED_AT) DESC NULLS LAST,
+                         LOADED_AT                         DESC NULLS LAST
+            ) AS RN
+        FROM RAW_FBI.FBI_ARRESTS_STATE_RAW
+        WHERE OBSERVATION_DATE IS NOT NULL
+    )
     SELECT
         STATE,
         OFFENSE_CODE,
