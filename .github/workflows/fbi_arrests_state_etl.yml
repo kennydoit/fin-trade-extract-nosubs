@@ -84,6 +84,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install boto3 requests snowflake-connector-python cryptography
 
+      - name: Clear S3 prefix before run
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          FBI_STATE_FILTER: ${{ github.event.inputs.state }}
+        run: |
+          echo "Clearing s3://fin-trade-extract-nosubs-bucket/fbi/arrests/state/"
+          aws s3 rm s3://fin-trade-extract-nosubs-bucket/fbi/arrests/state/ --recursive
+          echo "S3 prefix cleared."
+
       - name: Fetch FBI state arrests and upload to S3
         working-directory: ${{ github.workspace }}
         env:
