@@ -6,9 +6,10 @@ name: FRED ETL - No Watermark (Temporary)
       - main
     paths:
       - '.github/workflows/fred_watermark_etl.yml'
-      - 'scripts/**'
-      - 'snowflake/**'
-      - 'config/**'
+      - 'scripts/etl/fetch_fred_watermark.py'
+      - 'snowflake/runbooks/load_fred_from_s3.sql'
+      - 'snowflake/runbooks/merge_fred_raw_to_curated.sql'
+      - 'config/fred_series.yml'
   workflow_dispatch:
     inputs:
       category_filter:
