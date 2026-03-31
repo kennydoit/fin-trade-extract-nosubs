@@ -20,9 +20,7 @@ name: FRED ETL - No Watermark (Temporary)
         description: "Optional max number of series to process"
         required: false
         type: number
-  schedule:
-    # Daily at 23:00 UTC
-    - cron: "0 23 * * *"
+
 
 jobs:
   fred-etl-no-watermark:

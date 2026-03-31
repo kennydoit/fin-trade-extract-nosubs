@@ -116,27 +116,18 @@ def api_get(path: str, params: dict | None = None, timeout: int = 30) -> Any:
 # Fetch + flatten
 # ---------------------------------------------------------------------------
 
-def _first_series(d: dict) -> dict:
-    """Return the first dict value from a top-level series container."""
-    for v in d.values():
-        if isinstance(v, dict):
-            return v
-    return {}
-
-
 def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict]:
-    """Fetch national arrest data for one offense code.
+    """Fetch national arrest counts for one offense code.
 
     The API returns:
       {
-        "actuals":     {"United States Arrests": {"MM-YYYY": count, ...}},
-        "rates":       {"United States Arrests": {"MM-YYYY": rate_per_100k, ...}},
-        "populations": {"population": {"United States": {"MM-YYYY": population, ...}}},
+        "actuals": {"United States Arrests": {"MM-YYYY": count, ...}},
+        "rates":   {"United States Arrests": {"MM-YYYY": rate,  ...}},
         ...
       }
 
-    Each MM-YYYY entry is emitted as a separate monthly row containing:
-      observation_date, value (count), rate (per 100k), population, offense_code, extracted_at
+    Monthly counts are summed by year and returned as one row per year,
+    enriched with ``offense_code`` and ``extracted_at``.
     """
     path = f"/arrest/national/{offense_code}"
     params = {"type": "counts", "from": FROM_DATE, "to": TO_DATE}
@@ -149,38 +140,42 @@ def fetch_arrests_for_offense(offense_code: int, extracted_at: str) -> list[dict
         log.warning("Unexpected payload shape for offense %d: %s", offense_code, type(payload))
         return []
 
-    # actuals -> {"United States Arrests": {"MM-YYYY": count}}
-    actuals_series = _first_series(payload.get("actuals", {}))
-    if not actuals_series:
+    # actuals -> {"United States Arrests": {"MM-YYYY": count, ...}}
+    actuals = payload.get("actuals", {})
+    if not isinstance(actuals, dict):
+        log.warning("Unexpected 'actuals' shape for offense %d: %s", offense_code, type(actuals))
+        return []
+
+    # Grab the first (and typically only) series dict
+    series: dict | None = None
+    for v in actuals.values():
+        if isinstance(v, dict):
+            series = v
+            break
+
+    if not series:
         log.warning("No actuals series found for offense %d", offense_code)
         return []
 
-    # rates -> {"United States Arrests": {"MM-YYYY": rate_per_100k}}
-    rates_series = _first_series(payload.get("rates", {}))
-
-    # populations -> {"population": {"United States": {"MM-YYYY": population}}}
-    pop_outer = payload.get("populations", {})
-    pop_inner = _first_series(pop_outer)          # {"United States": {"MM-YYYY": pop}}
-    population_series = _first_series(pop_inner)  # {"MM-YYYY": pop}
-
-    rows = []
-    for date_str, count in sorted(actuals_series.items(),
-                                   key=lambda x: (x[0].split("-")[1], x[0].split("-")[0])):
+    # Aggregate monthly values ("MM-YYYY") to annual totals
+    annual: dict[int, float] = {}
+    for date_str, count in series.items():
         if count is None:
             continue
         try:
-            month_str, year_str = date_str.split("-")  # "MM-YYYY"
-            observation_date = f"{year_str}-{month_str}-01"
-            rows.append({
-                "observation_date": observation_date,
-                "value":            float(count),
-                "rate":             rates_series.get(date_str),
-                "population":       population_series.get(date_str),
-                "offense_code":     offense_code,
-                "extracted_at":     extracted_at,
-            })
+            year = int(date_str.split("-")[1])  # "MM-YYYY" -> YYYY
+            annual[year] = annual.get(year, 0.0) + float(count)
         except (ValueError, IndexError, TypeError):
             log.warning("Could not parse date '%s' or count for offense %d", date_str, offense_code)
+
+    rows = []
+    for year, total in sorted(annual.items()):
+        rows.append({
+            "data_year":    year,
+            "value":        total,
+            "offense_code": offense_code,
+            "extracted_at": extracted_at,
+        })
 
     return rows
 
